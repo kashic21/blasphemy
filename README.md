@@ -34,7 +34,7 @@ Run the automated full-game test with `npm test`.
 1. Put this folder in a GitHub repo.
 2. On [render.com](https://render.com), choose **New → Blueprint** and pick the repo. It reads `render.yaml` and sets everything up.
    (Or **New → Web Service**: build command `npm install`, start command `npm start`.)
-3. Share the URL. Done.
+3. Share the URL. Done. Every push to `main` deploys automatically (the Render GitHub app is installed on this repo).
 
 Note: games are kept in memory, so a server restart ends any games in progress. That's fine for playtesting. Add a database (e.g. Supabase or Redis) before a big launch.
 
