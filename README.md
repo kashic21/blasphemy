@@ -2,8 +2,8 @@
 
 A Jackbox-style unpopular-opinion party game. Players join from their phones with a 5-letter docket code — no app install.
 
-**This version:** Accusations mode, fully playable end to end.
-Confession and Testimony are designed in Figma and come next.
+**This version:** Accusations and Confession modes, fully playable end to end.
+Testimony is designed in Figma and comes next.
 
 ## How a game works
 1. **Join the court:** someone taps *Open a new case* (they become the judge/host). Everyone else enters their name + the docket code.
@@ -48,8 +48,13 @@ Note: games are kept in memory, so a server restart ends any games in progress. 
 | `test/sim.js` | Bot players that play a full game to check nothing's broken |
 
 ## Next up
-- Confession mode (devil's advocate, 3 votes, reveal wheel)
+
 - Testimony mode (slide uploads as PDF/images, Convince-O-Meter)
 - 18+ topic toggle and a report/skip button
 - Accounts + saved testimonies (profile)
 - Sound + motion polish
+
+## Confession mode
+Everyone anonymously confesses an unpopular opinion or story. Each round a random juror is secretly made the **devil's advocate** (it can even be the confessor) and must defend it. After arguing out loud, everyone casts 3 votes: **agree/disagree** (public), **who confessed** (secret) and **who's the devil's advocate** (secret).
+Scoring: +1 for guessing the confessor · +1 for spotting the devil's advocate · devil's advocate gets +1 per other juror who votes agree. Scores stay hidden until the end.
+**Reveal randomizer** (host setting): a 6-slot wheel, reveal/seal alternating. *After each round*: spun after every confession. *End of game*: the leader tips it (+2 slots their way) and one spin decides for everyone. *Off*: everyone is unmasked at the end.

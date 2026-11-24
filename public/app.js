@@ -9,7 +9,7 @@
     hostStep: 'topics', customTopic: false, customSub: false, editing: false,
     name: localStorage.getItem('blasphemy-name') || '',
     code: (new URLSearchParams(location.search).get('code') || '').toUpperCase(),
-    draft: '', busy: false,
+    draft: '', busy: false, spunAt: {},
   };
 
   // ---------- helpers ----------
@@ -29,6 +29,7 @@
     back: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3 L5 8 L10 13" stroke="#1A1A1A" stroke-width="2"/></svg>',
     clock: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/><path d="M8 6 V9 L10 10 M6 1 H10" stroke="currentColor" stroke-width="1.6"/></svg>',
     plus: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2 V14 M2 8 H14" stroke="#1A1A1A" stroke-width="2.2"/></svg>',
+    mask: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><g stroke="#E8553A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7 C8 5 16 5 20 7 C20 14 17 19 12 20 C7 19 4 14 4 7 Z"/><path d="M6 6 L4.5 2.5 L8.5 5.2 M18 6 L19.5 2.5 L15.5 5.2"/><path d="M8 11 Q9.5 10 11 11 M13 11 Q14.5 10 16 11 M9 15 Q12 17 15 15"/></g></svg>',
     star: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2" stroke="#fff" stroke-width="1.8"/><path d="M12 7 L13.4 10.6 L17 12 L13.4 13.4 L12 17 L10.6 13.4 L7 12 L10.6 10.6 Z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>',
   };
   const cta = (label, action, { meta = '', box = '', ic = icon.arrow, disabled = false } = {}) =>
@@ -47,6 +48,9 @@
   const timerEl = () => S.deadline ? `<span class="timer" data-deadline="${S.deadline}">${icon.clock}<span class="t">0:00</span></span>` : '';
   const topicLine = () => [S.settings.topic, S.settings.sub].filter(Boolean).join(' · ');
   const rot = i => [-3, 2, -1.5, 2.5, -2, 1.5][i % 6];
+  const MODES = { accusations: { name: 'Accusations', bg: 'var(--blue)', fg: '#fff' }, confession: { name: 'Confession', bg: 'var(--yellow)', fg: 'var(--ink)' } };
+  const mode = () => MODES[(S && S.settings.mode) || 'accusations'];
+  const modeBox = () => `<span class="box-tag" style="background:${mode().bg};color:${mode().fg};border-color:${mode().fg === '#fff' ? mode().bg : 'var(--ink)'}">${mode().name}</span>`;
 
   // ---------- screens ----------
   function home() {
@@ -87,7 +91,7 @@
   }
 
   function topRoom(left) {
-    return `<div class="topbar">${left || `<span class="mono">Docket <span class="pixel" style="font-size:22px">${esc(S.code)}</span></span>`}<span class="tag" style="transform:rotate(3deg)">ACCUSATIONS</span></div>`;
+    return `<div class="topbar">${left || `<span class="mono">Docket <span class="pixel" style="font-size:22px">${esc(S.code)}</span></span>`}<span class="tag" style="transform:rotate(3deg);background:${mode().bg};color:${mode().fg}">${mode().name.toUpperCase()}</span></div>`;
   }
 
   function topics() {
@@ -150,10 +154,26 @@
       ${ui.customSub ? `<form class="card inner stack gap8 mt8" data-form="custom-sub"><label class="field"><span class="mono">Custom sub-topic</span><input class="input" name="sub" maxlength="60" placeholder="e.g. Pineapple on pizza" required autofocus></label><button class="btn dark">Use it</button></form>` : ''}
       <div class="mono mt16">Choose proceedings</div>
       <div class="tabs mt8" role="tablist">
-        <button class="on" role="tab" aria-selected="true" style="background:var(--blue);color:#fff">Accusations</button>
-        <button role="tab" aria-selected="false" disabled style="background:var(--yellow)">Confession<br><span style="font-size:8px">soon</span></button>
+        <button class="${st.mode === 'accusations' ? 'on' : ''}" role="tab" aria-selected="${st.mode === 'accusations'}" data-a="set-mode" data-mode="accusations" style="background:var(--blue);color:#fff">Accusations</button>
+        <button class="${st.mode === 'confession' ? 'on' : ''}" role="tab" aria-selected="${st.mode === 'confession'}" data-a="set-mode" data-mode="confession" style="background:var(--yellow)">Confession</button>
         <button role="tab" aria-selected="false" disabled style="background:var(--green)">Testimony<br><span style="font-size:8px">soon</span></button>
       </div>
+      ${st.mode === 'confession' ? `
+      <div class="panel yellow">
+        <div class="between"><span class="mono sm">● Proceeding 02</span></div>
+        <div style="font-weight:700;font-size:26px;letter-spacing:-.02em;margin-top:6px">Confession</div>
+        <p style="font-size:14px;line-height:1.45;margin:6px 0 0">Everyone confesses an unpopular opinion or story — anonymously. Argue it out loud, vote agree or disagree in public, then secretly guess who confessed and who's the devil's advocate secretly defending it.</p>
+        <div class="settings">
+          <span class="mono sm">Settings</span>
+          <div class="setting"><span><span class="mono">Round timer</span><br><span class="hand" style="font-size:15px">keeps deliberations moving</span></span>${seg('timerOn', [false, true], v => v ? 'On' : 'Off')}</div>
+          ${st.timerOn ? `
+          <div class="stack gap8"><span class="mono">Time to write</span>${seg('writeSeconds', [60, 90, 120, 180], v => v < 120 ? v + 's' : (v / 60) + 'm')}</div>
+          <div class="stack gap8"><span class="mono">Time to argue + vote</span>${seg('voteSeconds', [30, 60, 90, 120], v => v < 120 ? v + 's' : '2m')}</div>` : ''}
+          <div class="setting"><span><span class="mono">Reveal randomizer</span><br><span class="hand" style="font-size:15px">a wheel decides who gets unmasked</span></span>${seg('revealOn', [false, true], v => v ? 'On' : 'Off')}</div>
+          ${st.revealOn ? `<div class="stack gap8"><span class="mono">Spin the wheel</span>${seg('revealWhen', ['round', 'end'], v => v === 'round' ? 'After each round' : 'End of game')}</div>
+          <span class="hand" style="font-size:15px">${st.revealWhen === 'round' ? '6 slots, reveal · seal alternating, spun after every confession' : 'one spin decides for everyone — and the winner adds 2 slots their way'}</span>` : '<span class="hand" style="font-size:15px">off: everyone is unmasked at the end of the game</span>'}
+        </div>
+      </div>` : `
       <div class="panel blue">
         <div class="between"><span class="mono sm" style="color:#fff">● Proceeding 01</span></div>
         <div style="font-weight:700;font-size:26px;letter-spacing:-.02em;margin-top:6px">Accusations</div>
@@ -165,7 +185,7 @@
           <div class="stack gap8"><span class="mono" style="color:#fff">Time to write</span>${seg('writeSeconds', [60, 90, 120, 180], v => v < 120 ? v + 's' : (v / 60) + 'm')}</div>
           <div class="stack gap8"><span class="mono" style="color:#fff">Time per exhibit</span>${seg('voteSeconds', [30, 60, 90, 120], v => v < 120 ? v + 's' : '2m')}</div>` : ''}
         </div>
-      </div>
+      </div>`}
       <div class="hand mt16" style="text-align:right">share the docket no. with your jury ↓</div>
       ${cta('Open court', 'open-court', { meta: S.code })}`;
   }
@@ -183,7 +203,7 @@
         <div class="hand">jurors enter this code to join</div>
         <div class="row mt8"><button class="btn small" data-a="copy" data-link="${esc(link)}">Copy link</button>${navigator.share ? `<button class="btn small dark" data-a="share" data-link="${esc(link)}">Send link</button>` : ''}</div>
       </div>
-      <div class="row mt16" style="flex-wrap:wrap"><span class="box-tag">${esc(S.settings.topic)}</span>${S.settings.sub ? `<span class="box-tag">${esc(S.settings.sub)}</span>` : ''}<span class="box-tag" style="background:var(--blue);color:#fff;border-color:var(--blue)">Accusations</span>${S.settings.timerOn ? `<span class="box-tag">⏱ timer on</span>` : ''}</div>
+      <div class="row mt16" style="flex-wrap:wrap"><span class="box-tag">${esc(S.settings.topic)}</span>${S.settings.sub ? `<span class="box-tag">${esc(S.settings.sub)}</span>` : ''}${modeBox()}${S.settings.timerOn ? `<span class="box-tag">⏱ timer on</span>` : ''}</div>
       <div class="between mt20"><span class="mono">The lineup</span><span><span class="pixel" style="font-size:22px">${n}/${S.maxPlayers}</span> <span class="mono sm">jurors</span></span></div>
       <div class="grid3 mt12">${S.players.map((p, i) => mug(p, { judge: p.id === S.hostId, rot: rot(i), off: !p.connected })).join('')}${Array.from({ length: open }, () => '<div class="seat">seat open</div>').join('')}</div>
       <div class="spacer"></div>
@@ -198,7 +218,7 @@
     const n = S.players.filter(p => p.connected).length;
     return `
       <div class="topbar"><span class="mono">File your take</span>${timerEl()}</div>
-      <div class="row mt8"><span class="box-tag" style="background:var(--blue);color:#fff;border-color:var(--blue)">Accusations</span><span class="mono sm">${esc(topicLine())}</span></div>
+      <div class="row mt8">${modeBox()}<span class="mono sm">${esc(topicLine())}</span></div>
       ${filed ? `
         <div class="pad mt20"><span class="tape" style="left:-10px;top:-4px;transform:rotate(28deg)"></span>
           <div class="mono">Filed under seal</div>
@@ -210,12 +230,12 @@
         <div class="spacer"></div>
         ${isHost() && S.submittedCount >= 2 ? cta('Close filing early', 'advance', { box: 'red', meta: `${S.submittedCount}/${n}` }) : '<div class="hand center muted">waiting for the rest of the jury…</div>'}`
       : `
-        <h2 class="h1 mt20">What's your unpopular opinion?</h2>
+        <h2 class="h1 mt20">${S.settings.mode === 'confession' ? 'What do you need to confess?' : "What's your unpopular opinion?"}</h2>
         <p class="hand muted" style="margin:4px 0 0">about <b>${esc(topicLine() || 'anything')}</b> — it's anonymous… for now.</p>
         <form class="stack gap8 mt16" data-form="opinion">
           <label class="sr" for="op">Your opinion</label>
           <textarea id="op" class="input" name="text" maxlength="200" placeholder="Grapes are better frozen than fresh." required>${esc(ui.draft || S.myOpinion || '')}</textarea>
-          <div class="between"><span class="hand muted" style="font-size:16px">the jury will try to guess it was you</span><span class="mono sm" data-count>${(ui.draft || S.myOpinion || '').length}/200</span></div>
+          <div class="between"><span class="hand muted" style="font-size:16px">${S.settings.mode === 'confession' ? 'an unpopular opinion or a story time — stays anonymous' : 'the jury will try to guess it was you'}</span><span class="mono sm" data-count>${(ui.draft || S.myOpinion || '').length}/200</span></div>
           <div class="spacer"></div>
           ${cta(S.myOpinion ? 'Re-file my take' : 'File my take', 'opinion-submit', { box: 'red', ic: icon.gavel })}
         </form>`}`;
@@ -227,7 +247,7 @@
     const total = S.players.filter(p => p.connected).length;
     return `
       <div class="topbar">${counter('Exhibit', r.index + 1, r.total)}${timerEl()}</div>
-      <div class="row mt8"><span class="box-tag" style="background:var(--blue);color:#fff;border-color:var(--blue)">Accusations</span><span class="mono sm">${esc(topicLine())}</span></div>
+      <div class="row mt8">${modeBox()}<span class="mono sm">${esc(topicLine())}</span></div>
       <div class="pad mt16" style="transform:rotate(1deg)">
         <span class="tape" style="left:-12px;top:-2px;transform:rotate(28deg)"></span><span class="tape" style="right:-12px;top:-2px;transform:rotate(-28deg)"></span>
         <div class="mono">The take on trial</div>
@@ -312,6 +332,194 @@
       <button class="linkbtn center" data-a="leave">Leave court</button>`;
   }
 
+  // ---------- Confession mode ----------
+  const SPIN_MS = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 3300;
+  function wheelSvg(slots) {
+    const n = slots.length, step = 360 / n; let out = '';
+    slots.forEach((k, i) => {
+      const c = i * step, a0 = (c - step / 2) * Math.PI / 180, a1 = (c + step / 2) * Math.PI / 180;
+      const f = v => v.toFixed(2);
+      out += `<path d="M0 0 L${f(Math.cos(a0) * 95)} ${f(Math.sin(a0) * 95)} A95 95 0 0 1 ${f(Math.cos(a1) * 95)} ${f(Math.sin(a1) * 95)} Z" fill="${k === 'R' ? '#A8DDC6' : '#1A1A1A'}" stroke="#1A1A1A" stroke-width="2"/>`;
+      const flip = Math.cos(c * Math.PI / 180) < -0.01;
+      out += `<text transform="rotate(${c}) translate(60 0)${flip ? ' rotate(180)' : ''}" text-anchor="middle" dominant-baseline="central" font-family="'Jersey 10', monospace" font-size="${n > 6 ? 17 : 20}" fill="${k === 'R' ? '#1A1A1A' : '#F2C230'}">${k === 'R' ? 'REVEAL' : 'SEAL'}</text>`;
+    });
+    return `<svg viewBox="-100 -100 200 200" width="100%" height="100%" aria-hidden="true">${out}<circle r="96" fill="none" stroke="#1A1A1A" stroke-width="3"/><circle r="16" fill="#F7F5EF" stroke="#1A1A1A" stroke-width="2.5"/><circle r="5" fill="#1A1A1A"/></svg>`;
+  }
+  // index null = idle wheel; otherwise it spins once and lands that slot under the pointer (3 o'clock)
+  function wheel(slots, index, key, size = 150) {
+    const step = 360 / slots.length;
+    const jitter = key ? ((key.length * 37) % 50 - 25) / 100 * step : 0;
+    const final = index == null ? 0 : -(1440 + index * step + jitter);
+    const start = index == null || ui.spunAt[key] ? final : 0;
+    return `<div class="wheel" style="width:${size}px;height:${size}px" role="img" aria-label="Reveal randomizer wheel with ${slots.length} slots">
+      <div class="wheel-rot" ${index == null ? '' : `data-spin-key="${key}" data-final="${final}"`} style="transform:rotate(${start}deg)">${wheelSvg(slots)}</div>
+      <svg class="pointer" width="26" height="24" viewBox="0 0 24 22" aria-hidden="true"><path d="M1 11 L23 1 V21 Z" fill="#E8553A" stroke="#1A1A1A" stroke-width="1.8" stroke-linejoin="round"/></svg></div>`;
+  }
+  const spinning = key => !ui.spunAt[key] || Date.now() - ui.spunAt[key] < SPIN_MS;
+  function afterRenderSpins() {
+    document.querySelectorAll('[data-spin-key]').forEach(el => {
+      const k = el.dataset.spinKey; if (ui.spunAt[k]) return;
+      ui.spunAt[k] = Date.now();
+      requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transition = `transform ${SPIN_MS}ms cubic-bezier(.15,.8,.2,1)`; el.style.transform = `rotate(${el.dataset.final}deg)`; }));
+      setTimeout(render, SPIN_MS + 80);
+    });
+  }
+  const chipList = (ids, empty = 'nobody') => ids.length ? `<div class="row" style="flex-wrap:wrap;gap:6px">${ids.map(id => person(P(id))).join('')}</div>` : `<span class="hand muted" style="font-size:16px">${empty}</span>`;
+  const daPill = id => `<span class="person" style="background:var(--ink);color:#fff;border-color:var(--red)">${icon.mask}${head(P(id), true)}${esc(P(id).name)}</span>`;
+  const step = (n, title, note) => `<div class="row gap12"><span class="chip-head" style="background:var(--ink);color:#fff">${n}</span><span><span class="mono">${title}</span><br><span class="hand muted" style="font-size:16px">${note}</span></span></div>`;
+
+  function cDeliberate() {
+    const r = S.round;
+    return `
+      <div class="topbar">${counter('Confession', r.index + 1, r.total)}${timerEl()}</div>
+      <div class="row mt8">${modeBox()}<span class="mono sm">${esc(topicLine())}</span></div>
+      <div class="card shadow mt16">
+        <div class="between" style="background:var(--ink);color:#fff;padding:8px 14px"><span class="mono sm">Anonymous confession</span><span class="mono sm" style="color:var(--yellow)">╳╳╳╳</span></div>
+        <div class="inner" style="padding:18px 16px">
+          <p style="font-weight:700;font-size:28px;line-height:1.1;letter-spacing:-.02em;margin:0">“${esc(r.text)}”</p>
+          <div class="hand muted mt8">— someone in this room</div>
+        </div>
+      </div>
+      ${r.yours ? `<div class="sticky mt12" style="background:var(--yellow);transform:rotate(-2deg);align-self:flex-start">this one's yours — act natural</div>` : ''}
+      ${r.youAreDA ? `
+        <div class="mt16" style="background:var(--ink);color:#fff;padding:18px 16px;box-shadow:5px 5px 0 var(--red);position:relative">
+          <span class="stamp sm" style="position:absolute;right:10px;top:-14px;transform:rotate(-8deg);background:var(--ink)">TOP SECRET</span>
+          <div class="mono sm" style="color:var(--yellow)">Only you can see this</div>
+          <div style="font-weight:700;font-size:24px;letter-spacing:-.02em;margin-top:6px">You're the devil's advocate.</div>
+          <p style="font-size:14px;line-height:1.45;margin:6px 0 0;color:var(--tab)">Defend this confession like your life depends on it — even if you think it's ridiculous. +1 for every juror who votes agree. Don't tell anyone${r.yours ? ' — and yes, it might be yours' : ''}.</p>
+        </div>` : `
+        <div class="card inner mt16" style="border:1.5px dashed var(--red);background:transparent">
+          <span class="box-tag" style="background:var(--ink);color:#fff;border-color:var(--red)">${icon.mask} Devil's advocate</span>
+          <div style="font-weight:700;font-size:16px;margin-top:8px">One of you was secretly told to defend this.</div>
+          <div class="hand muted" style="font-size:17px">they could even be the confessor. stay suspicious.</div>
+        </div>`}
+      <div class="mono mt20">Deliberate out loud</div>
+      <div class="hand" style="font-size:21px">agree? disagree? argue it out irl.</div>
+      <div class="heads mt8">${S.players.filter(p => p.connected).map(p => head(p)).join('')}</div>
+      <div class="spacer"></div>
+      ${isHost() ? cta('Open voting', 'advance', { meta: 'HOST' }) : '<div class="hand center">voting opens when the judge says so…</div>'}`;
+  }
+
+  function cVote() {
+    const r = S.round, v = S.myCVote || {};
+    const others = S.players.filter(p => p.id !== S.you);
+    const total = S.players.filter(p => p.connected).length;
+    const picks = key => `<div class="grid4 mt8">${others.map(p => `<button class="pick ${v[key] === p.id ? 'on' : ''}" data-a="cvote" data-key="${key}" data-val="${p.id}" aria-pressed="${v[key] === p.id}">${head(p)}<span>${esc(p.name)}</span></button>`).join('')}</div>`;
+    const done = v.stance && v.confessor && (v.da || r.youAreDA);
+    return `
+      <div class="topbar">${counter('Confession', r.index + 1, r.total)}${timerEl()}</div>
+      <div class="pad mt8"><div class="mono sm">On trial</div><b style="font-size:19px;line-height:1.2;display:block;margin-top:4px">“${esc(r.text)}”</b></div>
+      <div class="mt20">${step(1, 'Public vote', 'everyone sees this')}</div>
+      <div class="row mt8 gap12">
+        <button class="vote-btn agree ${v.stance === 'agree' ? 'on' : ''}" data-a="cvote" data-key="stance" data-val="agree" aria-pressed="${v.stance === 'agree'}"><span class="pixel" style="font-size:30px">AGREE</span></button>
+        <button class="vote-btn disagree ${v.stance === 'disagree' ? 'on' : ''}" data-a="cvote" data-key="stance" data-val="disagree" aria-pressed="${v.stance === 'disagree'}"><span class="pixel" style="font-size:30px">DISAGREE</span></button>
+      </div>
+      <div class="mt20">${step(2, 'Secret guess', 'who confessed? only you see this · +1 if right')}</div>
+      ${picks('confessor')}
+      ${r.youAreDA ? `<div class="card inner mt20" style="border-style:dashed"><span class="hand" style="font-size:17px">you're the devil's advocate — no third vote for you.</span></div>`
+        : `<div class="mt20">${step(3, "Spot the devil's advocate", 'anonymous · +1 if right')}</div>${picks('da')}`}
+      <div class="spacer"></div>
+      <div class="between mt16"><span class="mono">${S.doneCount}/${total} jurors locked in</span>${done ? '<span class="mono" style="color:var(--green)">✓ you\'re done</span>' : ''}</div>
+      ${isHost() ? `<div class="mt8">${cta('Close voting', 'advance', { box: 'red', meta: `${S.doneCount}/${total}` })}</div>` : ''}`;
+  }
+
+  function cResults() {
+    const r = S.cresult, rd = S.round, n = r.agree.length + r.disagree.length || 1;
+    const verdict = r.agree.length > r.disagree.length ? 'THE JURY AGREES' : r.agree.length < r.disagree.length ? 'THE JURY DISAGREES' : 'SPLIT DECISION';
+    const key = `round-${rd.index}-${rd.text.length}`;
+    const last = rd.index + 1 >= rd.total;
+    const spun = r.spin && !spinning(key);
+    let reveal = '';
+    if (r.spin && spun && r.revealed) reveal = `
+      <div class="card inner stack gap12 mt16">
+        <span class="mono sm" style="color:var(--red)">Unmasked</span>
+        <div class="row">${head(P(r.authorId))}<b style="font-size:18px">${esc(P(r.authorId).name)} confessed.</b></div>
+        <div class="stack gap4"><span class="mono sm muted">Guessed right</span>${chipList(r.confRight)}</div>
+        <div class="stack gap4"><span class="mono sm" style="color:var(--red)">Devil's advocate</span>${daPill(r.daId)}</div>
+        <div class="stack gap4"><span class="mono sm muted">Spotted the devil's advocate</span>${chipList(r.daRight)}</div>
+      </div>
+      <div class="mono mt16">Points this round</div>
+      <div class="list mt8">${r.awards.length ? r.awards.map(a => `<div class="row">${head(P(a.id))}<span class="hand" style="font-weight:700;font-size:19px">${esc(P(a.id).name)}</span><span class="mono sm muted grow">${esc(a.why)}</span><span class="pixel" style="font-size:24px">+${a.pts}</span></div>`).join('') : '<div class="hand muted">no points this round</div>'}</div>`;
+    else if (r.spin && spun) reveal = `<div class="card inner row gap12 mt16" style="background:var(--pad);border-style:dashed"><span class="chip-head" style="width:44px;height:44px;background:var(--red);color:#fff;font-size:24px">?</span><span><b>The confessor stays anonymous.</b><br><span style="font-size:13px">Secret guesses and the devil's advocate stay locked. Points still count — you just won't know who earned them.</span></span></div>`;
+    else if (!r.spin) reveal = `<div class="card inner mt16" style="background:var(--pad);border-style:dashed"><b>Identities stay hidden for now.</b><br><span style="font-size:13px">${S.settings.revealOn ? 'At the end of the game the winner tips the wheel — one spin decides if everyone gets unmasked.' : 'Everyone gets unmasked at the end of the game.'}</span></div>`;
+    return `
+      <div class="topbar"><span class="mono">The jury has spoken</span>${counter('Confession', rd.index + 1, rd.total)}</div>
+      <p class="hand" style="font-weight:700;font-size:26px;line-height:1.05;margin:8px 0 0">“${esc(rd.text)}”</p>
+      <div class="between mt16"><span class="mono">Public vote</span><span class="tag" style="background:var(--yellow);transform:rotate(3deg)">${verdict}</span></div>
+      <div class="split-bar mt8">
+        <div style="flex:${Math.max(r.agree.length, .001)};background:var(--mint)"><span class="pixel" style="font-size:40px">${r.agree.length}</span> <span class="mono sm">Agree</span><div class="heads mt4">${r.agree.map(id => head(P(id), true)).join('')}</div></div>
+        <div style="flex:${Math.max(r.disagree.length, .001)};background:var(--pink)"><span class="pixel" style="font-size:40px">${r.disagree.length}</span> <span class="mono sm">Disagree</span><div class="heads mt4">${r.disagree.map(id => head(P(id), true)).join('')}</div></div>
+      </div>
+      ${r.spin ? `
+        <div class="mono mt20">Reveal randomizer · 6 slots</div>
+        <div class="row gap16 mt8">${wheel(r.spin.slots, r.spin.index, key)}<div class="stack"><span class="hand muted">the wheel says…</span><span class="pixel" style="font-size:48px;color:${spun ? (r.revealed ? 'var(--red)' : 'var(--ink)') : 'var(--tab)'}">${spun ? (r.revealed ? 'REVEAL' : 'SEALED') : '…'}</span></div></div>` : ''}
+      ${reveal}
+      <div class="spacer"></div>
+      ${isHost() ? cta(last ? (S.settings.revealOn && S.settings.revealWhen === 'end' ? 'Final spin' : 'See the results') : 'Next confession', 'advance', { meta: last ? '' : `${rd.index + 2}/${rd.total}` }) : '<div class="hand center">waiting for the judge…</div>'}`;
+  }
+
+  function cTip() {
+    const w = P(S.tip.winnerId), amWinner = S.you === S.tip.winnerId, canTip = amWinner || (isHost() && !w.connected);
+    return `
+      <div class="topbar"><span class="row mono"><span class="dot"></span>All confessions heard</span></div>
+      <div class="hand">one last thing…</div>
+      <h1 class="h1">The final spin</h1>
+      <div class="mt16" style="background:var(--ink);color:#fff;padding:16px">
+        <div class="row gap16"><div style="width:110px">${mug(w, { rot: -3 })}</div><div class="stack"><span class="mono sm" style="color:var(--yellow)">Winning so far</span><span class="pixel" style="font-size:44px">${S.tip.score} PTS</span><span class="hand" style="color:var(--tab);font-size:17px">${esc(w.name)} gets to tip the wheel</span></div></div>
+      </div>
+      <div class="row gap16 mt20" style="justify-content:center">${wheel(['R', 'S', 'R', 'S', 'R', 'S'], null, null, 170)}</div>
+      <p class="center" style="font-size:15px;line-height:1.45">${amWinner ? 'Pick a side — 2 slots get added your way, then the wheel decides whether every confessor gets unmasked.' : canTip ? `${esc(w.name)} left — as judge, you tip it for them.` : `Waiting for ${esc(w.name)} to tip the wheel…`}</p>
+      <div class="spacer"></div>
+      ${canTip ? `<div class="row gap12"><button class="btn grow" data-a="tip" data-choice="seal" style="min-height:64px;flex-direction:column;gap:0">Keep them hidden<span class="hand" style="text-transform:none;letter-spacing:0;font-size:16px">+2 seal slots</span></button><button class="btn yellow grow" data-a="tip" data-choice="reveal" style="min-height:64px;flex-direction:column;gap:0;font-size:15px">Reveal everything<span class="hand" style="font-size:16px">+2 reveal slots</span></button></div>` : ''}`;
+  }
+
+  function standings() {
+    const sorted = S.players.slice().sort((a, b) => b.score - a.score);
+    const top = sorted.length ? sorted[0].score : 0; let rank = 0, prev = null;
+    const winners = sorted.filter(p => p.score === top);
+    return `
+      <div class="mt16" style="background:var(--ink);padding:16px">
+        <div class="mono sm center" style="color:var(--yellow)">${winners.length > 1 ? 'Winners · tie for first' : 'Winner'}</div>
+        <div class="row mt12" style="justify-content:center;gap:16px">${winners.slice(0, 3).map((p, i) => `<div class="stack gap8" style="width:110px;align-items:center">${mug(p, { rot: i % 2 ? 3 : -3 })}<span class="pixel" style="color:#fff;font-size:30px">${p.score} PTS</span></div>`).join('')}</div>
+      </div>
+      <div class="mono mt20">Final standings</div>
+      <div class="list mt8">${sorted.map((p, i) => { if (p.score !== prev) { rank = i + 1; prev = p.score; } return `<div class="row" style="${p.score === top ? 'background:rgba(242,194,48,.25)' : ''}"><span class="pixel" style="font-size:26px;width:18px">${rank}</span>${head(p)}<span class="hand grow" style="font-weight:700;font-size:20px">${esc(p.name)}${p.id === S.you ? ' (you)' : ''}</span><span class="pixel" style="font-size:26px">${p.score}</span></div>`; }).join('')}</div>`;
+  }
+
+  function cFinal() {
+    const res = S.results, fs = res.finalSpin;
+    const spun = !fs || !spinning('final');
+    return `
+      <div class="topbar"><span class="row mono"><span class="dot"></span>Case closed</span><span class="mono"><span class="pixel" style="font-size:22px">${res.reveal.length}</span> confessions</span></div>
+      <div class="hand">the court is adjourned…</div>
+      <h1 class="h1" style="font-size:32px">The confessions, revealed?</h1>
+      ${fs ? `<div class="mt16" style="background:var(--ink);color:#fff;padding:16px">
+        <div class="mono sm" style="color:var(--yellow)">${esc(P(fs.by).name)} tipped it toward ${fs.choice === 'reveal' ? 'reveal' : 'seal'} · 8 slots</div>
+        <div class="row gap16 mt12">${wheel(fs.slots, fs.index, 'final', 130)}<div class="stack"><span class="hand" style="color:var(--tab)">the wheel says…</span><span class="pixel" style="font-size:46px;color:${spun ? (fs.revealed ? 'var(--red)' : 'var(--yellow)') : 'var(--muted)'}">${spun ? (fs.revealed ? 'REVEAL' : 'SEALED') : '…'}</span></div></div>
+      </div>` : ''}
+      ${spun ? `
+      ${standings()}
+      <div class="mono mt20">The confessions</div>
+      <div class="hand muted" style="font-size:16px">who confessed, who called it, and the devil's advocate · swipe</div>
+      <div class="hscroll wide mt8">${res.reveal.map(x => `
+        <div class="exhibit gap8">
+          <span class="mono sm">Confession ${String(x.n).padStart(2, '0')}</span>
+          <b style="font-size:15px;line-height:1.25">“${esc(x.text)}”</b>
+          ${x.revealed ? `
+            <div class="row">${head(P(x.authorId))}<span class="hand" style="font-weight:700">confessed by ${esc(P(x.authorId).name)}</span></div>
+            <div class="stack gap4"><span class="mono sm muted">Guessed right</span>${chipList(x.confRight)}</div>
+            <hr style="border:0;border-top:1.5px solid rgba(0,0,0,.15);width:100%;margin:2px 0">
+            <div class="stack gap4"><span class="mono sm" style="color:var(--red)">Devil's advocate</span>${daPill(x.daId)}</div>
+            <div class="stack gap4"><span class="mono sm muted">Spotted by</span>${chipList(x.daRight)}</div>`
+          : `<div class="card inner" style="background:transparent;border-style:dashed"><b>Sealed.</b> <span class="hand">this one stays anonymous forever.</span></div>`}
+          <span class="mono sm muted">${x.agree} agreed · ${x.disagree} disagreed</span>
+        </div>`).join('')}</div>
+      <div class="spacer"></div>
+      <div class="hand center muted">the court stays in session — same lobby, same jury</div>
+      ${isHost() ? cta('New case', 'new-game', { ic: icon.gavel, box: 'red' }) : `<div class="hand center">waiting for ${esc(P(S.hostId).name)} to open a new case…</div>`}
+      <button class="linkbtn center" data-a="leave">Leave court</button>` : '<div class="spacer"></div>'}`;
+  }
+
   // ---------- render ----------
   function render() {
     const focused = document.activeElement && document.activeElement.name;
@@ -326,13 +534,18 @@
       case 'voting': html = voting(); break;
       case 'decision': html = decision(); break;
       case 'verdict': html = verdict(); break;
-      case 'results': html = results(); break;
+      case 'c-deliberate': html = cDeliberate(); break;
+      case 'c-vote': html = cVote(); break;
+      case 'c-results': html = cResults(); break;
+      case 'c-tip': html = cTip(); break;
+      case 'results': html = S.results.mode === 'confession' ? cFinal() : results(); break;
       default: html = home();
     }
     $app.innerHTML = html;
     $app.querySelectorAll('input[name],textarea[name]').forEach(el => { if (typed[el.name] && !el.value) el.value = typed[el.name]; });
     if (focused) { const el = $app.querySelector(`[name="${focused}"]`); if (el) { el.focus(); try { el.setSelectionRange(caret, caret); } catch {} } }
     tick();
+    afterRenderSpins();
   }
 
   function tick() {
@@ -390,7 +603,10 @@
     if (a === 'to-topics') { ui.hostStep = 'topics'; return render(); }
     if (a === 'pick-sub') return socket.emit('settings', { sub: b.dataset.sub || null });
     if (a === 'custom-sub') { ui.customSub = !ui.customSub; return render(); }
-    if (a === 'set') { const v = b.dataset.val; return socket.emit('settings', { [b.dataset.key]: v === 'true' ? true : v === 'false' ? false : +v }); }
+    if (a === 'set') { const v = b.dataset.val; return socket.emit('settings', { [b.dataset.key]: v === 'true' ? true : v === 'false' ? false : isNaN(+v) ? v : +v }); }
+    if (a === 'set-mode') return socket.emit('settings', { mode: b.dataset.mode });
+    if (a === 'cvote') { const r = await emit('cvote', { [b.dataset.key]: b.dataset.val }); if (r.error) toast(r.error); return; }
+    if (a === 'tip') return socket.emit('tip', { choice: b.dataset.choice });
     if (a === 'open-court') return socket.emit('openCourt');
     if (a === 'edit-case') { ui.hostStep = 'setup'; return socket.emit('editCase'); }
     if (a === 'start') { const r = await emit('start'); if (r && r.error) toast(r.error); return; }
