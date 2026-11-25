@@ -34,6 +34,9 @@ const emit = (s, ev, data) => new Promise(r => s.emit(ev, data, r));
   await wait(50);
   assert.strictEqual(host.state.phase, 'writing');
 
+  host.s.emit('advance'); await wait(30);
+  assert.strictEqual(host.state.phase, 'writing', 'host cannot skip writing');
+  assert.strictEqual(host.state.deadline, null, 'writing is never timed');
   const opinions = ['Grapes are better frozen.', 'Bananas are overrated.', 'Watermelon is crunchy water.', 'Pineapple goes on everything.'];
   for (let i = 0; i < 4; i++) assert.ok((await emit(bots[i].s, 'submitOpinion', { text: opinions[i] })).ok);
   await wait(50);
@@ -53,13 +56,14 @@ const emit = (s, ev, data) => new Promise(r => s.emit(ev, data, r));
     for (const b of bots) {
       const target = r % 2 === 0 ? (b === author ? innocent : author) : (b === innocent ? others[1] : innocent);
       assert.ok((await emit(b.s, 'vote', { suspectId: target.id })).ok);
+      if (b === bots[0]) { host.s.emit('advance'); await wait(30); assert.strictEqual(host.state.phase, 'voting', 'host cannot skip voting'); }
     }
     await wait(50);
     assert.strictEqual(host.state.phase, 'decision');
     host.s.emit('advance'); await wait(50);
     assert.strictEqual(host.state.phase, 'verdict');
     const v = bots[1].state.verdict;
-    if (r % 2 === 0) { assert.strictEqual(v.caught, true); assert.strictEqual(v.authorId, author.id); }
+    if (r % 2 === 0) { assert.strictEqual(v.caught, true); assert.strictEqual(v.authorId, author.id); assert.strictEqual(v.calls.length, 4); assert.strictEqual(v.calls.filter(c => c.ok).length, 3); }
     else { assert.strictEqual(v.caught, false); assert.strictEqual(v.authorId, null, 'blasphemer stays hidden'); assert.ok(v.awards.some(a => a.id === null && a.pts === 2)); }
     host.s.emit('advance'); await wait(50);
   }

@@ -6,14 +6,14 @@ const { server } = require('../server');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const emit = (s, ev, data) => new Promise(r => s.emit(ev, data, r));
 
-async function game(url, revealWhen) {
+async function game(url, revealWhen, agreeOn = true) {
   const bots = ['Maya', 'Dev', 'Jordan', 'Sam'].map(n => ({ name: n, s: io(url, { forceNew: true }), state: null }));
   bots.forEach(b => b.s.on('state', st => { b.state = st; }));
   await Promise.all(bots.map(b => new Promise(r => b.s.on('connect', r))));
   const host = bots[0];
   const { code, playerId } = await emit(host.s, 'create', { name: host.name }); host.id = playerId;
   for (const b of bots.slice(1)) b.id = (await emit(b.s, 'join', { code, name: b.name })).playerId;
-  host.s.emit('settings', { mode: 'confession', topic: 'Food', revealOn: true, revealWhen });
+  host.s.emit('settings', { mode: 'confession', topic: 'Food', revealOn: true, revealWhen, agreeOn });
   host.s.emit('openCourt'); await wait(40);
   assert.ok((await emit(host.s, 'start')).ok);
   const texts = ['Fruit in a salad is a crime.', 'Cereal is better dry.', 'Ranch goes on everything.', 'Cold pizza beats hot pizza.'];
@@ -35,19 +35,24 @@ async function game(url, revealWhen) {
     assert.ok((await emit(da.s, 'cvote', { da: bots.find(b => b !== da).id })).error, 'DA cannot guess the DA');
     for (const b of bots) {
       const others = bots.filter(x => x !== b);
-      const confessor = author !== b ? author : others[0];
+      // bots[3] gets fooled into accusing the devil's advocate of confessing
+      const confessor = (b === bots[3] && da !== b && da !== author) ? da : author !== b ? author : others[0];
       const daPick = b === da ? undefined : (da !== b ? da : others[0]);
       const stance = b === bots[1] ? 'disagree' : 'agree';
-      assert.ok((await emit(b.s, 'cvote', { stance, confessor: confessor.id, ...(daPick ? { da: daPick.id } : {}) })).ok);
-      // expected points: right confessor guess, right DA spot, DA +1 per other juror who agreed
+      const patch = { confessor: confessor.id, ...(daPick ? { da: daPick.id } : {}), ...(agreeOn ? { stance } : {}) };
+      if (agreeOn) assert.ok((await emit(b.s, 'cvote', { ...patch, stance: undefined, lock: true })).error, 'cannot lock without the public vote');
+      assert.ok((await emit(b.s, 'cvote', { ...patch, lock: true })).ok);
+      if (b === bots[0]) { host.s.emit('advance'); await wait(30); assert.strictEqual(host.state.phase, 'c-vote', 'host cannot skip voting'); }
+      // expected points: right confessor guess, right DA spot, DA +1 per juror who accused them of confessing
       if (confessor === author) expected[b.id] += 1;
       if (daPick === da) expected[b.id] += 1;
-      if (stance === 'agree' && b !== da) expected[da.id] += 1;
+      if (confessor === da && da !== author) expected[da.id] += 1;
     }
     await wait(60);
     assert.strictEqual(host.state.phase, 'c-results');
     const cr = bots[2].state.cresult;
-    assert.strictEqual(cr.agree.length, 3); assert.strictEqual(cr.disagree.length, 1);
+    if (agreeOn) { assert.strictEqual(cr.agree.length, 3); assert.strictEqual(cr.disagree.length, 1); }
+    else assert.strictEqual(cr.agree.length + cr.disagree.length, 0, 'no public vote when it is off');
     if (revealWhen === 'round') {
       assert.ok(cr.spin && cr.spin.slots.length === 6, '6-slot wheel');
       assert.deepStrictEqual(cr.spin.slots, ['R', 'S', 'R', 'S', 'R', 'S'], 'slots alternate');
@@ -87,6 +92,7 @@ async function game(url, revealWhen) {
   const url = `http://localhost:${server.address().port}`;
   const a = await game(url, 'round');
   const b = await game(url, 'end');
-  console.log(`✓ Confession simulated twice: wheel after each round (${a.shown}/${a.total} revealed) and end-of-game tip (${b.shown}/${b.total} revealed); roles stay secret, scores add up`);
+  await game(url, 'round', false);
+  console.log(`✓ Confession simulated twice: wheel after each round (${a.shown}/${a.total} revealed) and end-of-game tip (${b.shown}/${b.total} revealed), plus a run with the agree/disagree vote off; roles stay secret, scores add up`);
   server.close(); process.exit(0);
 })().catch(e => { console.error('✗', e.message); process.exit(1); });

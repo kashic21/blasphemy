@@ -10,7 +10,7 @@ const { Server } = require('socket.io');
 
 const PORT = process.env.PORT || 3000;
 const MIN_PLAYERS = 3;
-const MAX_PLAYERS = 12;
+const MAX_PLAYERS = 8;
 const OPINION_MAX = 200;
 const NAME_MAX = 16;
 const POINTS_CORRECT_GUESS = 1; // accuser guessed the blasphemer
@@ -18,7 +18,7 @@ const POINTS_EVADED = 2;        // blasphemer slipped past the jury
 // Confession mode
 const POINTS_GUESS_CONFESSOR = 1;  // secretly guessed who confessed
 const POINTS_SPOT_DA = 1;          // secretly spotted the devil's advocate
-const POINTS_DA_PER_AGREE = 1;     // devil's advocate, per other juror who voted agree
+const POINTS_DA_PER_FOOLED = 1;    // devil's advocate, per juror who accused THEM of being the confessor
 const WHEEL_BASE = ['R', 'S', 'R', 'S', 'R', 'S'];            // 6 alternating slots
 const WHEEL_TIPPED = { reveal: ['R', 'S', 'R', 'R', 'S', 'R', 'S', 'R'], seal: ['S', 'R', 'S', 'S', 'R', 'S', 'R', 'S'] };
 const ROOM_IDLE_MS = 30 * 60 * 1000;
@@ -55,7 +55,8 @@ function createRoom(hostName) {
     hostId: null,
     players: new Map(), // id -> {id,name,color,score,connected,socketId}
     phase: 'setup',     // setup | lobby | writing | voting | decision | verdict | results
-    settings: { mode: 'accusations', group: null, topic: null, sub: null, timerOn: false, writeSeconds: 90, voteSeconds: 60, revealOn: true, revealWhen: 'end' },
+    settings: { mode: 'accusations', group: null, topic: null, sub: null, timerOn: false, voteSeconds: 120, agreeOn: true, revealOn: true, revealWhen: 'end' },
+    timeUp: false,      // the round timer ran out — players still have to vote, it just says so
     cvotes: new Map(),  // confession: voterId -> {stance, confessor, da}
     daId: null,         // confession: this round's devil's advocate
     tip: null,          // confession: {winnerId} while the winner tips the wheel
@@ -101,7 +102,7 @@ function startWriting(room) {
   room.order = [];
   room.tip = null; room.finalSpin = null; room.daId = null;
   for (const p of room.players.values()) p.score = 0;
-  setTimer(room, room.settings.writeSeconds, () => beginVoting(room));
+  clearTimer(room); // writing is never timed
 }
 
 function beginVoting(room) {
@@ -118,14 +119,15 @@ function startConfRound(room) {
   room.cvotes = new Map();
   const pool = connected(room);
   room.daId = pool[crypto.randomInt(pool.length)].id; // can be anyone — even the confessor
+  room.timeUp = false;
   setTimer(room, room.settings.voteSeconds, () => openConfVoting(room));
 }
 function openConfVoting(room) {
   if (room.phase !== 'c-deliberate') return;
   room.phase = 'c-vote';
-  setTimer(room, room.settings.voteSeconds, () => toConfResults(room));
+  clearTimer(room); // no skipping: results only come once every juror has voted
 }
-const cvoteDone = (room, id) => { const v = room.cvotes.get(id); return !!(v && v.stance && v.confessor && (v.da || id === room.daId)); };
+const cvoteDone = (room, id) => { const v = room.cvotes.get(id); return !!(v && v.locked && (v.stance || !room.settings.agreeOn) && v.confessor && (v.da || id === room.daId)); };
 function maybeAdvanceConf(room) {
   const need = connected(room).map(p => p.id);
   if (need.length && need.every(id => cvoteDone(room, id))) toConfResults(room);
@@ -143,13 +145,14 @@ function toConfResults(room) {
   }
   for (const g of confGuess) if (g.ok) awards.push({ id: g.id, pts: POINTS_GUESS_CONFESSOR, why: 'guessed the confessor' });
   for (const g of daGuess) if (g.ok) awards.push({ id: g.id, pts: POINTS_SPOT_DA, why: "spotted the devil's advocate" });
-  const won = agree.filter(id => id !== room.daId).length;
-  if (won) awards.push({ id: room.daId, pts: won * POINTS_DA_PER_AGREE, why: `devil's advocate · won over ${won}` });
+  // the devil's advocate scores for every juror who was fooled into accusing THEM of confessing
+  const fooled = room.daId !== op.authorId ? confGuess.filter(g => g.guess === room.daId).map(g => g.id) : [];
+  if (fooled.length) awards.push({ id: room.daId, pts: fooled.length * POINTS_DA_PER_FOOLED, why: `devil's advocate · fooled ${fooled.length}` });
   for (const a of awards) { const p = room.players.get(a.id); if (p) p.score += a.pts; }
   const st = room.settings;
   const roundSpin = st.revealOn && st.revealWhen === 'round' ? spin(WHEEL_BASE) : null;
   room.history[room.roundIndex] = {
-    opinionId: op.id, authorId: op.authorId, text: op.text, daId: room.daId,
+    opinionId: op.id, authorId: op.authorId, text: op.text, daId: room.daId, fooled,
     agree, disagree, confGuess, daGuess, awards, spin: roundSpin,
     revealed: roundSpin ? roundSpin.revealed : null, // null = decided at the end of the game
   };
@@ -190,7 +193,8 @@ function currentOpinion(room) {
 function startRound(room) {
   room.phase = 'voting';
   room.votes = new Map();
-  setTimer(room, room.settings.voteSeconds, () => toDecision(room));
+  room.timeUp = false;
+  setTimer(room, room.settings.voteSeconds, () => { room.timeUp = true; }); // deliberation clock only — never skips anyone's vote
 }
 
 function eligibleVoters(room) {
@@ -264,7 +268,7 @@ function viewFor(room, pid) {
   }));
   const v = {
     code: room.code, phase: room.phase, hostId: room.hostId, you: pid, players,
-    settings: room.settings, deadline: room.deadline, serverNow: Date.now(),
+    settings: room.settings, deadline: room.deadline, serverNow: Date.now(), timeUp: room.timeUp,
     minPlayers: MIN_PLAYERS, maxPlayers: MAX_PLAYERS,
   };
   if (room.phase === 'writing') {
@@ -291,25 +295,52 @@ function viewFor(room, pid) {
       caught: rec.caught,
       top: rec.top,
       authorId: rec.caught ? rec.authorId : null, // the blasphemer is only named if caught
+      totalVotes: rec.tally.reduce((n, t) => n + t.voters.length, 0),
+      votesFor: Object.fromEntries(rec.tally.map(t => [t.id, t.voters.length])),
+      // when caught, everyone's call is shown (called it / wrong call / caught)
+      calls: rec.caught ? [...room.players.keys()].map(id => {
+        const t = rec.tally.find(x => x.voters.includes(id));
+        return { id, ok: !!(t && t.id === rec.authorId), voted: !!t, author: id === rec.authorId };
+      }) : null,
       awards: rec.awards.map(a => a.secret ? { id: null, pts: a.pts, why: a.why } : { id: a.id, pts: a.pts, why: a.why }),
     };
   }
   if (['c-deliberate', 'c-vote', 'c-results'].includes(room.phase)) {
     const op = currentOpinion(room);
     v.round = { index: room.roundIndex, total: room.order.length, text: op.text, yours: op.authorId === pid, youAreDA: room.daId === pid };
-    if (room.phase === 'c-vote') { v.myCVote = room.cvotes.get(pid) || {}; v.doneCount = connected(room).filter(p => cvoteDone(room, p.id)).length; }
+    if (room.phase === 'c-vote') {
+      v.myCVote = room.cvotes.get(pid) || {};
+      v.doneCount = connected(room).filter(p => cvoteDone(room, p.id)).length;
+      // the agree/disagree vote is public — everyone sees who locked in which way
+      v.publicStances = room.settings.agreeOn ? [...room.cvotes.entries()].filter(([, x]) => x.locked && x.stance).map(([id, x]) => ({ id, stance: x.stance })) : [];
+    }
   }
   if (room.phase === 'c-results') {
     const h = room.history[room.roundIndex];
     const r = { agree: h.agree, disagree: h.disagree, spin: h.spin, revealed: h.spin ? h.revealed : null };
     if (h.spin && h.revealed) Object.assign(r, {
-      authorId: h.authorId, daId: h.daId, awards: h.awards,
+      authorId: h.authorId, daId: h.daId, awards: h.awards, fooled: h.fooled,
       confRight: h.confGuess.filter(g => g.ok).map(g => g.id), daRight: h.daGuess.filter(g => g.ok).map(g => g.id),
+      confGuess: h.confGuess, daGuess: h.daGuess,
+      daPts: h.awards.filter(a => a.id === h.daId && a.why.startsWith("devil's")).reduce((n, a) => n + a.pts, 0),
     });
     v.cresult = r;
   }
   if (room.phase === 'c-tip') v.tip = { winnerId: room.tip.winnerId, score: room.players.get(room.tip.winnerId)?.score ?? 0 };
   if (room.phase === 'results') {
+    const stats = {};
+    for (const id of room.players.keys()) stats[id] = { calls: 0, escapes: 0, caught: 0, confRight: 0, daSpotted: 0, daPts: 0 };
+    for (const h of room.history) {
+      if (room.settings.mode === 'confession') {
+        for (const g of h.confGuess) if (g.ok && stats[g.id]) stats[g.id].confRight++;
+        for (const g of h.daGuess) if (g.ok && stats[g.id]) stats[g.id].daSpotted++;
+        if (stats[h.daId]) stats[h.daId].daPts += h.fooled.length * POINTS_DA_PER_FOOLED;
+      } else {
+        for (const t of h.tally) if (t.id === h.authorId) for (const id of t.voters) if (stats[id]) stats[id].calls++;
+        if (stats[h.authorId]) { if (h.caught) stats[h.authorId].caught++; else stats[h.authorId].escapes++; }
+      }
+    }
+    v.stats = stats;
     if (room.settings.mode === 'confession') {
       v.results = {
         mode: 'confession', finalSpin: room.finalSpin,
@@ -409,8 +440,8 @@ io.on('connection', socket => {
     if ('topic' in s) st.topic = s.topic ? clean(s.topic, 40) : null;
     if ('sub' in s) st.sub = s.sub ? clean(s.sub, 60) : null;
     if ('timerOn' in s) st.timerOn = !!s.timerOn;
-    if ('writeSeconds' in s && [60, 90, 120, 180].includes(+s.writeSeconds)) st.writeSeconds = +s.writeSeconds;
-    if ('voteSeconds' in s && [30, 60, 90, 120].includes(+s.voteSeconds)) st.voteSeconds = +s.voteSeconds;
+    if ('voteSeconds' in s && [60, 120, 300, 600].includes(+s.voteSeconds)) st.voteSeconds = +s.voteSeconds;
+    if ('agreeOn' in s) st.agreeOn = !!s.agreeOn;
     broadcast(room);
   });
 
@@ -419,7 +450,7 @@ io.on('connection', socket => {
 
   socket.on('start', (_ = {}, ack = () => {}) => {
     const { room, isHost } = ctx();
-    if (!isHost || room.phase !== 'lobby') return ack({ error: 'Only the judge can start.' });
+    if (!isHost || room.phase !== 'lobby') return ack({ error: 'Only the host can start.' });
     if (connected(room).length < MIN_PLAYERS) return ack({ error: `Need at least ${MIN_PLAYERS} jurors.` });
     startWriting(room); ack({ ok: true }); broadcast(room);
   });
@@ -460,6 +491,10 @@ io.on('connection', socket => {
       if (key === 'da' && me.id === room.daId) return ack({ error: "You already know who the devil's advocate is." });
       v[key] = id;
     }
+    if (patch.lock) {
+      if ((room.settings.agreeOn && !v.stance) || !v.confessor || (!v.da && me.id !== room.daId)) return ack({ error: 'Finish every vote first.' });
+      v.locked = true;
+    }
     room.cvotes.set(me.id, v);
     ack({ ok: true });
     maybeAdvanceConf(room);
@@ -470,7 +505,7 @@ io.on('connection', socket => {
     const { room, me, isHost } = ctx();
     if (!room || room.phase !== 'c-tip') return;
     const winner = room.players.get(room.tip.winnerId);
-    // the winner tips the wheel; if they've dropped out, the judge does it for them
+    // the winner tips the wheel; if they've dropped out, the host does it for them
     if (me.id === room.tip.winnerId || (isHost && !winner?.connected)) { tipWheel(room, choice); broadcast(room); }
   });
 
@@ -478,21 +513,19 @@ io.on('connection', socket => {
     const { room, isHost } = ctx();
     if (!isHost) return;
     if (room.phase === 'c-deliberate') openConfVoting(room);
-    else if (room.phase === 'c-vote') toConfResults(room);
     else if (room.phase === 'c-results') nextConf(room);
-    else if (room.phase === 'writing') beginVoting(room);
-    else if (room.phase === 'voting') toDecision(room);
+
     else if (room.phase === 'decision') toVerdict(room);
     else if (room.phase === 'verdict') nextRound(room);
     broadcast(room);
   });
 
-  socket.on('newGame', () => {
+  socket.on('newGame', ({ keepTopic } = {}) => {
     const { room, isHost } = ctx();
     if (!isHost || room.phase !== 'results') return;
     clearTimer(room);
     room.phase = 'setup';
-    room.settings.topic = null; room.settings.sub = null; room.settings.group = null;
+    if (!keepTopic) { room.settings.topic = null; room.settings.sub = null; room.settings.group = null; }
     room.opinions = []; room.order = []; room.history = []; room.votes = new Map();
     room.cvotes = new Map(); room.tip = null; room.finalSpin = null; room.daId = null;
     for (const p of room.players.values()) p.score = 0;

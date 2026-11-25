@@ -6,13 +6,13 @@ A Jackbox-style unpopular-opinion party game. Players join from their phones wit
 Testimony is designed in Figma and comes next.
 
 ## How a game works
-1. **Join the court:** someone taps *Open a new case* (they become the judge/host). Everyone else enters their name + the docket code.
-2. **Topics → Case setup:** the judge picks a topic, an optional sub-topic (or a custom one), and whether to use a timer.
-3. **Lobby:** jurors gather (minimum 3). The judge taps *Begin proceedings*.
+1. **Join the court:** someone taps *Open a new case* (they become the host). Everyone else enters their name + the docket code.
+2. **Topics → Case setup:** the host picks a topic, an optional sub-topic (or a custom one), and whether to use a timer.
+3. **Lobby:** jurors gather (minimum 3). The host taps *Begin proceedings*.
 4. **File your take:** everyone secretly writes an unpopular opinion.
 5. **Exhibits:** each take is shown anonymously. Everyone (including the author, who has to act natural) votes on who wrote it.
 6. **Jury decisions → Verdict:** votes are revealed. If the most-accused player wrote it → **GUILTY**. If not (or it's a tie), the blasphemer stays hidden until the end.
-7. **The truth revealed:** who said what, final standings. The judge can open a new case with the same lobby.
+7. **The truth revealed:** who said what, final standings. The host can open a new case with the same lobby.
 
 **Scoring:** +1 to every accuser who guessed right · +2 to the blasphemer if they escape (they weren't the single most-accused player).
 Change these at the top of `server.js` (`POINTS_CORRECT_GUESS`, `POINTS_EVADED`).

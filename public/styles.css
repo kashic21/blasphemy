@@ -100,7 +100,7 @@ textarea.input{height:auto;min-height:120px;padding:12px;font-weight:700;font-si
 button.mug{border:1.5px solid var(--ink);box-shadow:3px 3px 0 var(--ink)}
 button.mug.on{border:2.5px solid var(--red);box-shadow:4px 4px 0 var(--red)}
 .mug.off{opacity:.45}
-.judge{position:absolute;right:-6px;top:-8px;transform:rotate(6deg);background:var(--yellow);padding:2px 6px;font-family:var(--mono);font-weight:700;font-size:9px;letter-spacing:.1em;z-index:2}
+.hosttag{position:absolute;right:-6px;top:-8px;transform:rotate(6deg);background:var(--yellow);padding:2px 6px;font-family:var(--mono);font-weight:700;font-size:9px;letter-spacing:.1em;z-index:2}
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 10px}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .seat{border:1.5px dashed var(--muted);min-height:118px;display:grid;place-items:center;color:var(--muted);font-family:var(--hand);font-size:17px}
@@ -143,9 +143,10 @@ button.mug.on{border:2.5px solid var(--red);box-shadow:4px 4px 0 var(--red)}
 .chip.dark{background:var(--ink);color:#fff}
 
 /* mode tabs + panel */
-.tabs{display:flex;align-items:flex-end;height:46px;gap:0}
-.tabs button{flex:1;height:38px;border:0;border-radius:8px 8px 0 0;font-family:var(--mono);font-weight:700;font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin-right:-6px;line-height:1.15;padding:0 10px}
+.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:end;height:46px;gap:4px}
+.tabs button{min-width:0;height:38px;border:0;border-radius:8px 8px 0 0;font-family:var(--mono);font-weight:700;font-size:10px;letter-spacing:.06em;text-transform:uppercase;line-height:1.15;padding:0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tabs button.on{height:46px;position:relative;z-index:2}
+.tabs button:disabled{opacity:.85;color:var(--ink)}
 .panel{padding:16px 18px 18px;position:relative;z-index:3}
 .panel.blue{background:var(--blue);color:#fff}
 .seg{display:flex;border:1.5px solid currentColor}
@@ -196,3 +197,34 @@ button.mug.on{border:2.5px solid var(--red);box-shadow:4px 4px 0 var(--red)}
 .wheel .pointer{position:absolute;right:-12px;top:50%;transform:translateY(-50%)}
 .hscroll.wide{grid-template-rows:auto;grid-auto-columns:250px}
 .stack>.person{align-self:flex-start}
+
+/* ---------- Figma 1:1 pass ---------- */
+.logo-block{position:relative;display:flex;flex-direction:column;align-items:center}
+.logo-box{border:3px solid var(--ink);background:#fff;padding:6px 14px 2px;box-shadow:5px 5px 0 var(--ink)}
+.logo-box h1{margin:0;font-family:var(--pixel);font-weight:400;font-size:62px;letter-spacing:.04em;line-height:.9}
+.overlay{position:fixed;inset:0;background:rgba(26,26,26,.55);display:grid;place-items:center;padding:20px;z-index:8}
+.fcheck{position:absolute;right:6px;top:18px;width:22px;height:22px;background:var(--ink);display:grid;place-items:center}
+.folder:not(.white) .ftitle{color:inherit}
+.exhibit-a{height:150px;background:var(--chart);display:grid;place-items:center;position:relative}
+.ptitle{font-family:var(--pixel);font-size:46px;line-height:.9;margin-top:6px}
+.pbody{margin:6px 0 0;font-size:14px;line-height:1.4}
+.filed{position:absolute;right:12px;top:12px;border:2.5px solid var(--red);color:var(--red);font-family:var(--pixel);font-size:20px;line-height:.9;padding:4px 8px;text-align:center;transform:rotate(10deg)}
+.seat span{text-align:center;line-height:1.1}
+.hero{position:relative;height:250px;margin-top:8px}
+.hero-mug{position:absolute;left:0;top:10px;width:170px}
+.hero-mug .mug .chart{height:170px}.hero-mug .mug .head{width:80px;height:112px;border-radius:40px 40px 10px 10px;font-size:50px}.hero-mug .mug .name{font-size:24px}
+.hero-stamp{position:absolute;right:0;top:70px;transform:rotate(-10deg);z-index:2}
+.hero-note{position:absolute;right:16px;top:8px}
+.sealed{display:flex;gap:12px;align-items:center;background:#fff;border:1.5px dashed var(--ink);padding:12px 14px}
+.seal{width:44px;height:44px;border-radius:50%;background:var(--red);display:grid;place-items:center;flex:none;box-shadow:inset 0 0 0 4px rgba(0,0,0,.15)}
+.winners{background:var(--ink);color:#fff;padding:16px;position:relative}
+.secret{background:var(--ink);color:#fff;padding:22px 18px 18px;position:relative;display:flex;flex-direction:column;gap:8px}
+.vote-btn{position:relative;gap:2px}
+.yourvote{position:absolute;top:-10px;right:-6px;background:var(--ink);color:#fff;font-family:var(--mono);font-weight:700;font-size:9px;letter-spacing:.1em;padding:3px 6px;transform:rotate(4deg)}
+.pick{position:relative}
+.pick-badge{position:absolute;right:2px;top:2px}
+.tipbtn{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px;background:transparent;color:#fff;border:1.5px solid #fff;text-align:left}
+.tipbtn.y{background:var(--yellow);color:var(--ink);border-color:var(--yellow)}
+.tipbtn.chosen{outline:3px solid var(--red);outline-offset:2px}
+.tipbtn:disabled:not(.chosen){opacity:.6}
+.sticky-bottom{position:sticky;bottom:calc(12px + env(safe-area-inset-bottom));z-index:4}
